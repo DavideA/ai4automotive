@@ -38,13 +38,19 @@ def train_epoch(ds, model, kld, optim, epoch, args):
         x_res, x_crp, x_ff, y, y_crp = (d.to(device) for d in data)
 
         # DO STUFF HERE - perform a training update
+        optim.zero_grad()
+        p_crp, p_res = model(x_res, x_crp, x_ff)
+        loss_crp = kld(p_crp, y_crp)
+        loss_res = kld(p_res, y)
+        loss_tot = loss_crp + loss_res
+        loss_tot.backward()
+        optim.step()
 
-
-        # print(f'Train epoch: {epoch} '
-        #       f'[{batch_idx * len(x_res)}/{len(ds)} '
-        #       f'({100. * batch_idx / len(dl):.0f}%)]\t'
-        #       f'Loss crop: {loss_crp.item():.4f}\t'
-        #       f'Loss resize: {loss_res.item():.4f}\t')
+        print(f'Train epoch: {epoch} '
+              f'[{batch_idx * len(x_res)}/{len(ds)} '
+              f'({100. * batch_idx / len(dl):.0f}%)]\t'
+              f'Loss crop: {loss_crp.item():.4f}\t'
+              f'Loss resize: {loss_res.item():.4f}\t')
 
 
 def visualize(ds, model, args, epoch):
@@ -56,9 +62,10 @@ def visualize(ds, model, args, epoch):
         x_res, x_crp, x_ff, y_res, y_crp = (d.to(device) for d in next(iter(dl)))
 
         # DO STUFF HERE - get the network prediction
+        p_crp, p_res = model(x_res, x_crp, x_ff)
 
-        # image = to_image(p_res, y_res, x_ff)
-        # io.imsave(f'out/{epoch:03d}.png', image)
+        image = to_image(p_res, y_res, x_ff)
+        io.imsave(f'out/{epoch:03d}.png', image)
 
 
 def main():

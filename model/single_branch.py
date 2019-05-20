@@ -19,8 +19,8 @@ class COARSEModel(nn.Module):
                 c3d_layers.append(nn.ReLU())
         self.c3d_layers = nn.Sequential(*c3d_layers)
 
-        self.pool4 = nn.Sequential()  # fix
-        self.final_conv = nn.Sequential()  # fix
+        self.pool4 = nn.MaxPool3d((4, 1, 1))
+        self.final_conv = nn.Conv2d(512, 1, 3, padding=1)
 
         self.reset_parameters()
 
@@ -31,11 +31,17 @@ class COARSEModel(nn.Module):
     def forward(self, x):
         with torch.no_grad():
             # 1) forward through c3d layers
-            # 2) perform pool4
-            # 3) remove temporal dimension
-            # 4) perform resize
-            # 5) perform final conv (with relu)
-            pass
+            h = self.c3d_layers(x)
+        # 2) perform pool4
+        h = self.pool4(h)
+        # 3) remove temporal dimension
+        h = torch.squeeze(h, dim=2)
+        # 4) perform resize
+        h = F.interpolate(h, scale_factor=8, mode='bilinear')
+        # 5) perform final conv (with relu)
+        h = self.final_conv(h)
+
+        return h
 
 
 class SingleBranchModel(nn.Module):
@@ -47,7 +53,15 @@ class SingleBranchModel(nn.Module):
         self.lrelu = nn.LeakyReLU(1e-3)
 
         self.coarse = COARSEModel()
-        self.refine = nn.Sequential()
+        self.refine = nn.Sequential(
+            nn.Conv2d(4, 32, 3, padding=1),
+            self.lrelu,
+            nn.Conv2d(32, 16, 3, padding=1),
+            self.lrelu,
+            nn.Conv2d(16, 8, 3, padding=1),
+            self.lrelu,
+            nn.Conv2d(8, 1, 3, padding=1)
+        )
 
         self.reset_parameters()
 
@@ -61,15 +75,22 @@ class SingleBranchModel(nn.Module):
 
         # Res stream
         # 1) forward through coarse
+        p_res = self.coarse(x_res)
         # 2) 4x upsampling
+        p_res = F.interpolate(p_res, scale_factor=4, mode='bilinear')
         # 3) Concatenate full frame (X_ff)
+        p_res = torch.cat((p_res, X_ff), dim=1)
         # 4) Forward through refine layers (with relu)
+        p_res = self.refine(p_res)
+        p_res = self.relu(p_res)
 
         # Crop stream
         # 1) forward through coarse
+        p_crp = self.coarse(x_crp)
         # 2) activate with relu
+        p_crp = self.relu(p_crp)
 
-        pass
+        return p_crp, p_res
 
 
 if __name__ == '__main__':

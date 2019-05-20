@@ -17,5 +17,7 @@ class KLD(nn.Module):
         Q /= torch.sum(Q, dim=[1, 2, 3], keepdim=True) + self.eps
 
         # DO STUFF HERE - implement KL DIVERGENCE
-
-        return torch.FloatTensor([0.]).to(str(P.device), requires_grad=True)
+        kl = P * torch.log(P / (Q + self.eps) + self.eps)
+        kl = torch.sum(kl, dim=[1, 2, 3])
+        kl = torch.mean(kl, dim=0)
+        return kl
